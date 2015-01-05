@@ -58,6 +58,7 @@ has 'feed' => (is=>'ro',isa=>'Bool',default=>0);
 has 'author' => (is=>'ro',isa=>'Str');
 has 'paged_list' => (is=>'ro',isa=>'Int',default=>0);
 has 'prev_next_nav' => (is=>'ro',isa=>'Int',default=>0);
+has 'list_image' => (is=>'ro',isa=>'Str');
 
 has 'raw_content'      => ( is => 'rw', isa => 'Str' );
 has 'content' => ( is => 'rw', isa => 'Str', lazy_build=>1 );
@@ -68,13 +69,14 @@ sub _build_content {
     return $raw_content unless $converter;
 
     if ($self->inline_images) {
-        $raw_content=~s/<bliothumb:(.*?)>/$self->image_by_name($1,'thumbnail')/ge;
-        $raw_content=~s/<blioimg:(.*?)>/$self->image_by_name($1,'url')/ge;
+        $raw_content=~s/<bliothumb:(.*?)>/$self->call_on_image_by_name($1,'thumbnail')/ge;
+        $raw_content=~s/<blioimg:(.*?)>/$self->call_on_image_by_name($1,'url')/ge;
 
-        $raw_content=~s/<bliothumb#(\d+)>/$self->image_by_index($1,'thumbnail')/ge;
-        $raw_content=~s/<blioimg#(\d+)>/$self->image_by_index($1,'url')/ge;
+        $raw_content=~s/<bliothumb#(\d+)>/$self->call_on_image_by_index($1,'thumbnail')/ge;
+        $raw_content=~s/<blioimg#(\d+)>/$self->call_on_image_by_index($1,'url')/ge;
     }
 
+    no if $] >= 5.018, 'warnings', "experimental::smartmatch"; # TODO # why, oh, why???
     given ($converter) {
         when ('html') { return $raw_content }
         when ([qw(textile markdown bbcode)]) {
@@ -154,15 +156,17 @@ sub new_from_file {
     $node->register_tags($blio, $tags) if $tags && $blio->tags;
 
     # check and add single image
-    my $single_image = $file->basename;
-    $single_image =~ s/\.txt$/.jpg/i;
-    my $single_image_file = $file->parent->file($single_image);
-    if (-e $single_image_file) {
-        my $img = Blio::Image->new(
-            base_dir    => $blio->source_dir,
-            source_file => $single_image_file,
-        );
-        $node->add_image($img);
+    foreach my $ext (qw(jpg jpeg png)) {
+        my $single_image = $file->basename;
+        $single_image =~ s/\.txt$/.$ext/i;
+        my $single_image_file = $file->parent->file($single_image);
+        if (-e $single_image_file) {
+            my $img = Blio::Image->new(
+                base_dir    => $blio->source_dir,
+                source_file => $single_image_file,
+            );
+            $node->add_image($img);
+        }
     }
 
     # check and add images dir
@@ -171,7 +175,7 @@ sub new_from_file {
     $img_dir = $file->parent->subdir($img_dir.'_images');
     if (-d $img_dir) {
         while (my $image_file = $img_dir->next) {
-            next unless $image_file =~ /\.jpe?g$/i;
+            next unless $image_file =~ /\.(jpe?g|png)$/i;
             my $img = Blio::Image->new(
                 base_dir    => $blio->source_dir,
                 source_file => $image_file,
@@ -299,7 +303,7 @@ sub relative_root {
 sub possible_parent_url {
     my $self = shift;
     my $ppurl = $self->url;
-    $ppurl =~ s{/\w+.html$}{.html};
+    $ppurl =~ s{/[\-\w]+.html$}{.html};
     return $ppurl;
 }
 
@@ -336,17 +340,14 @@ sub sorted_images {
     return \@sorted;
 }
 
-sub teaser {
+sub teaser { # TODO enable simple "--fold--" syntax
     my ($self, $length) = @_;
     return unless $self->raw_content;
     $length ||= 200;
-
     my $teaser;
     if ($length =~ /^\d+$/) {
         $teaser = $self->content;
-        $teaser =~ s/<a href(.*?)>//g;
-        $teaser =~ s{</a>}{}g;
-        $teaser =~ s{<img(.*?)>}//g;
+        $teaser =~ s{</?(.*?)>}{}g;
         $teaser = substr($teaser,0,$length);
         $teaser =~s/\s\S+$/ .../;
     }
@@ -373,7 +374,7 @@ sub write_feed {
     my $rfc3339 = DateTime::Format::RFC3339->new();
 
     my $feed = XML::Atom::SimpleFeed->new(
-        title=>decode_utf8($self->title || 'no title'),
+        title=>$self->title || 'no title',
         author=>$blio->site_author || $0,
         link=>{
             href=>$site_url.$self->feed_url,
@@ -385,22 +386,27 @@ sub write_feed {
 
     foreach my $child (@$children) {
         next unless $child->parent;
-        my @entry = (
-            title=>decode_utf8($child->title || 'no title'),
-            link=>$site_url.$child->url,
-            id=>$site_url.$child->url,
-            updated=>$rfc3339->format_datetime($child->date),
-            category=>$child->parent->id,
-            summary=>decode_utf8($child->teaser || ' '),
-            content=>decode_utf8($child->content),
-        );
-        push (@entry,author => $self->author) if $self->author;
-        if ($child->has_tags) {
-            foreach my $tag (@{$child->tags}) {
-                push (@entry, category => $tag->title);
+        eval {
+            my @entry = (
+                title=>$child->title || 'no title',
+                link=>$site_url.$child->url,
+                id=>$site_url.$child->url,
+                updated=>$rfc3339->format_datetime($child->date),
+                category=>$child->parent->id,
+                summary=>($child->teaser || ' '),
+                content=>$child->content,
+            );
+            push (@entry,author => $self->author) if $self->author;
+            if ($child->has_tags) {
+                foreach my $tag (@{$child->tags}) {
+                    push (@entry, category => $tag->title);
+                }
             }
+            $feed->add_entry( @entry );
+        };
+        if ($@) {
+            say "ERR $@";
         }
-        $feed->add_entry( @entry );
     }
     my $feed_file = $blio->output_dir->file($self->feed_url);
     open(my $fh,'>:encoding(UTF-8)',$feed_file->stringify) || die "Cannot write to Atom feed file $feed_file: $!";
@@ -445,22 +451,41 @@ sub register_tags {
 }
 
 sub image_by_name {
+    my ($self, $name) = @_;
+    my @found = grep { $name eq $_->source_file->basename } @{$self->images};
+    return $found[0] if @found == 1;
+    return;
+}
+
+sub call_on_image_by_name {
     my ($self, $name, $method) = @_;
     $method ||= 'url';
-    my @found = grep { $name eq $_->source_file->basename } @{$self->images};
-    if (@found == 1) {
-        return $self->relative_root.$found[0]->$method;
-    }
-    return "cannot_resolve_image_".$name."_found_".scalar @found;
+    my $img = $self->image_by_name($name);
+    return "cannnot_resolve_image_$name" unless $img;
+    return $self->relative_root . $img->$method;
 }
 
 sub image_by_index {
-    my ($self, $index, $method) = @_;
-    $method ||= 'url';
+    my ($self, $index) = @_;
 
-    my $img = $self->images->[$index - 1];
-    return $self->relative_root.$img->$method if $img;
-    return "cannot_resolve_image_index_".$index;
+    return $self->images->[$index - 1];
+}
+
+sub call_on_image_by_index {
+    my ($self, $index, $method) = @_;
+    my $img = $self->image_by_index($index);
+    return "cannnot_resolve_image_$index" unless $img;
+    return $self->relative_root . $img->$method;
+}
+
+sub primary_image {
+    my $self = shift;
+    my $img;
+    if ($self->list_image) {
+        $img = $self->image_by_name( $self->list_image);
+    }
+    $img ||= $self->sorted_images->[0];
+    return $img;
 }
 
 sub prev_next_post {
@@ -488,13 +513,15 @@ __PACKAGE__->meta->make_immutable;
 
 =pod
 
+=encoding UTF-8
+
 =head1 NAME
 
 Blio::Node - A Blio Node
 
 =head1 VERSION
 
-version 2.002
+version 2.003
 
 =head1 AUTHOR
 

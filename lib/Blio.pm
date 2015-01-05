@@ -3,7 +3,7 @@ use 5.010;
 
 # ABSTRACT: domms blogging "engine"
 
-our $VERSION = 2.002;
+our $VERSION = 2.003;
 
 use Moose;
 use MooseX::Types::Path::Class;
@@ -212,13 +212,15 @@ __END__
 
 =pod
 
+=encoding UTF-8
+
 =head1 NAME
 
 Blio - domms blogging "engine"
 
 =head1 VERSION
 
-version 2.002
+version 2.003
 
 =head1 SYNOPSIS
 
@@ -227,28 +229,6 @@ Backend for the C<blio.pl> command. See L<blio.pl> and/or C<perldoc blio.pl> for
 more docs pending...
 
 docs provided by gabor, need to be integrated:
-
-=head1 NAME
-
-Blio - The static blog engine of domm
-
-=head1 ARTICLES
-
-=over 4
-
-=item 2013.01.20
-
-L<Blio updates|http://domm.plix.at/perl/2013_01_blio_updates.html>
-
-=item 2012.09.11
-
-L<Some new Blio features|http://domm.plix.at/perl/2012_09_11_some_new_blio_features.html>
-
-=item 2012.08.09
-
-L<Blio - my blogging "engine"|http://domm.plix.at/perl/2012_08_09_blio_my_blogging_engine.html>
-
-=back
 
 =head1 CONFIGURATION
 
@@ -296,15 +276,9 @@ the distribution and are installed along the module.
 
 =item site_author
 
-=item language
-
-Defaults to C<en>
-
 =item converter
 
 =item thumbnail
-
-Defaults to 300.
 
 =back
 
@@ -336,16 +310,6 @@ The module that represents each file is L<Blio::Node>.
 The only required entry in the header is the C<title>.
 
 TODO - there are more fields that need explanation.
-
-=head1 AUTHOR
-
-Thomas Klausner, <domm@cpan.org>
-
-=head1 COPYRIGHT & LICENSE
-
-Copyright 2013 Thomas Klausner
-
-This program is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
 
 =head1 AUTHOR
 

@@ -4,7 +4,7 @@
       "Thomas Klausner <domm@cpan.org>"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "Dist::Zilla version 4.300028, CPAN::Meta::Converter version 2.120921",
+   "generated_by" : "Dist::Zilla version 5.020, CPAN::Meta::Converter version 2.142060",
    "license" : [
       "perl_5"
    ],
@@ -44,6 +44,7 @@
             "Path::Class::Iterator" : "0",
             "Template" : "0",
             "XML::Atom::SimpleFeed" : "0",
+            "if" : "0",
             "namespace::autoclean" : "0",
             "perl" : "5.010",
             "strict" : "0",
@@ -56,6 +57,7 @@
             "Module::Pluggable" : "0",
             "Test::File" : "0",
             "Test::Most" : "0",
+            "lib" : "0",
             "utf8" : "0"
          }
       }
@@ -64,9 +66,9 @@
    "resources" : {
       "repository" : {
          "type" : "git",
-         "url" : "git+ssh://git.plix.at/home/domm/git/blio.git"
+         "url" : "git://git.plix.at/Blio.git"
       }
    },
-   "version" : "2.002"
+   "version" : "2.003"
 }
 
